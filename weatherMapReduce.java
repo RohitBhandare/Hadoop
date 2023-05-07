@@ -65,3 +65,54 @@ public class WeatherAnalysis {
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }
+import java.io.IOException;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapreduce.*;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class MaxTemperature {
+
+    public static class MaxTemperatureMapper extends Mapper<LongWritable, Text, Text, DoubleWritable> {
+
+        private static final int TEMPERATURE_COLUMN = 1;
+
+        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+            String[] fields = value.toString().split(",");
+            if (fields.length > TEMPERATURE_COLUMN) {
+                String date = fields[0];
+                double temperature = Double.parseDouble(fields[TEMPERATURE_COLUMN]);
+                context.write(new Text(date), new DoubleWritable(temperature));
+            }
+        }
+    }
+
+    public static class MaxTemperatureReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
+
+        public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+            double maxTemperature = Double.NEGATIVE_INFINITY;
+            for (DoubleWritable value : values) {
+                double temperature = value.get();
+                if (temperature > maxTemperature) {
+                    maxTemperature = temperature;
+                }
+            }
+            context.write(key, new DoubleWritable(maxTemperature));
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "MaxTemperature");
+        job.setJarByClass(MaxTemperature.class);
+        job.setMapperClass(MaxTemperatureMapper.class);
+        job.setReducerClass(MaxTemperatureReducer.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(DoubleWritable.class);
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
